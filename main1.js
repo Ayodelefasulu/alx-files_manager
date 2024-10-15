@@ -7,13 +7,13 @@ const waitConnection = () => {
             await setTimeout(() => {
                 i += 1;
                 if (i >= 10) {
-                    reject()
+                    reject(new Error('Connection timed out'));
                 }
                 else if(!dbClient.isAlive()) {
-                    repeatFct()
+                    repeatFct();
                 }
                 else {
-                    resolve()
+                    resolve();
                 }
             }, 1000);
         };
