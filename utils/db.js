@@ -31,7 +31,7 @@ class DBClient {
         if (!this.isAlive()) {
             throw new Error('Not connected to the database');
         }
-        const database = this.client.db();
+        const database = this.client.db('files_manager');
         const collection = database.collection('users');
         return await collection.countDocuments();
     }
