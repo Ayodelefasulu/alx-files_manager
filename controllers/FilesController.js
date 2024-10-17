@@ -1,7 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ObjectId } from 'mongodb';
 import fs from 'fs';
+import Bull from 'bull';
+import imageThumbnail from 'image-thumbnail';
 import path from 'path';
+import mime from 'mime-types';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
 
@@ -104,6 +107,31 @@ class FilesController {
         console.error("Error during file saving:", err.message); //
       return res.status(500).json({ error: 'Error saving file' });
     }
+
+    try {
+      const fileDocument = {
+        id: 'some_id',
+        userId: req.user.id,
+        name: 'image.png',
+        type: 'image', // The file type should be dynamically determined
+        isPublic: false,
+        parentId: req.body.parentId || 0,
+        localPath: '/some/local/path'
+      };
+
+      // Save the fileDocument to the database, then proceed with the next steps
+
+      // If the file type is 'image', add a job to the Bull queue
+      const { id: fileId, userId, type } = fileDocument;
+      if (type === 'image') {
+        await fileQueue.add({ fileId, userId });
+      }
+      return res.status(201).json(fileDocument);
+    } catch (error) {
+      console.log(error);
+      return res.status(500).json({ error: 'Error while uploading file' });
+    }
+
   }
 
   static async getShow(req, res) {
@@ -339,6 +367,122 @@ class FilesController {
     } catch (error) {
       console.error('Error in getIndex:', error);
       return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async putPublish(req, res) {
+    try {
+      const token = req.headers['x-token'];
+      if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const userId = await redisClient.get(`auth_${token}`);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const fileId = req.params.id;
+      const file = await dbClient.client.db('files_manager').collection('files').findOne({ _id: fileId, userId });
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Update isPublic to true
+      await dbClient.client.db('files_manager').collection('files').updateOne(
+        { _id: fileId, userId },
+        { $set: { isPublic: true } }
+      );
+
+      // Return the updated file document
+      const updatedFile = await dbClient.client.db('files_manager').collection('files').findOne({ _id: fileId, userId });
+      return res.status(200).json(updatedFile);
+    } catch (err) {
+      console.error('Error in putPublish:', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async putUnpublish(req, res) {
+    try {
+      const token = req.headers['x-token'];
+      if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const userId = await redisClient.get(`auth_${token}`);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const fileId = req.params.id;
+      const file = await dbClient.client.db('files_manager').collection('files').findOne({ _id: fileId, userId });
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Update isPublic to false
+      await dbClient.client.db('files_manager').collection('files').updateOne(
+        { _id: fileId, userId },
+        { $set: { isPublic: false } }
+      );
+
+      // Return the updated file document
+      const updatedFile = await dbClient.client.db('files_manager').collection('files').findOne({ _id: fileId, userId });
+      return res.status(200).json(updatedFile);
+    } catch (err) {
+      console.error('Error in putUnpublish:', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async getFile(req, res) {
+    const fileId = req.params.id;
+    const token = req.headers['x-token']; // Token for user authentication
+    const user = await dbClient.getUserFromToken(token);
+
+    try {
+      // Find file by ID
+      const file = await dbClient.client.db('files_manager').collection('files').findOne({ _id: ObjectId(fileId) });
+
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // If file is not public and no valid user, return 404
+      if (!file.isPublic && (!user || user._id.toString() !== file.userId)) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // If file is a folder, return an error
+      if (file.type === 'folder') {
+        return res.status(400).json({ error: "A folder doesn't have content" });
+      }
+
+      //const filePath = file.localPath;
+
+      let filePath = file.localPath;
+      if (size && ['100', '250', '500'].includes(size)) {
+        const thumbnailPath = `${filePath}_${size}`;
+        if (fs.existsSync(thumbnailPath)) {
+          filePath = thumbnailPath;
+        } else {
+          return res.status(404).json({ error: 'Not found' });
+        }
+      }
+
+      // Check if file exists locally
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Get MIME type and return file content
+      const mimeType = mime.lookup(file.name) || 'application/octet-stream';
+      res.setHeader('Content-Type', mimeType);
+      const fileContent = fs.readFileSync(filePath);
+      return res.status(200).send(fileContent);
+    } catch (err) {
+      return res.status(500).json({ error: 'Internal Server Error' });
     }
   }
 
