@@ -55,7 +55,7 @@ class FilesController {
       parentId: parentId === 0 ? '0' : ObjectId(parentId),
     };
 
-    console.log('User authenticated:', newFile);
+    console.log('User authenticated:', newFile); //
     console.log('POST /files endpoint hit'); //
     console.log('Request body:', req.body); //
     console.log('Request headers:', req.headers); //
@@ -105,6 +105,243 @@ class FilesController {
       return res.status(500).json({ error: 'Error saving file' });
     }
   }
+
+  static async getShow(req, res) {
+    try {
+      console.log("Beginning of getShow function...");
+
+      // Get token from the headers
+      const token = req.headers['x-token'];
+      if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+      // Retrieve userId from Redis
+      const userId = await redisClient.get(`auth_${token}`);
+      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+      const fileId = req.params.id;
+      console.log('userID: ', userId);
+
+      // Query the file by userId and _id (which is ObjectId)
+      let query = { userId: new ObjectId(userId) };
+
+      if (ObjectId.isValid(fileId)) {
+        query._id = new ObjectId(fileId);
+      } else {
+        return res.status(400).json({ error: 'Invalid file ID' });
+      }
+
+      // Search for the file in the database
+      const file = await dbClient.client.db('files_manager').collection('files').findOne(query);
+      if (!file) return res.status(404).json({ error: 'Not found' });
+
+      // Send back the file information
+      return res.status(200).json({
+        id: file._id.toString(),
+        userId: file.userId.toString(),
+        name: file.name,
+        type: file.type,
+        isPublic: file.isPublic,
+        parentId: file.parentId,
+        localPath: file.localPath || null
+      });
+
+    } catch (error) {
+      console.error('Error in getShow:', error);
+      return res.status(500).json({ error: 'Server error' });
+    }
+  }
+
+/*  static async getShow(req, res) {
+    try {
+      console.log("The beginning of function..."); //
+
+      const token = req.headers['x-token'];
+      if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+      const userId = await redisClient.get(`auth_${token}`);
+      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+      console.log('userID: ', userId); //
+
+      const fileId = req.params.id;
+      console.log("BEFORE FILE....");
+
+      // Check if fileId is a valid ObjectId
+      if (!ObjectId.isValid(fileId)) {
+        return res.status(400).json({ error: 'Invalid file ID' });
+      }
+
+      // Check if userId is a valid ObjectId
+      if (!ObjectId.isValid(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+
+      // Check if fileId is "0" or similar special case (not an ObjectId)
+      let query = { userId: new ObjectId(userId) };
+
+      if (fileId === "0") {
+        query.parentId = "0"; // Handle files with parentId = '0'
+      } else if (ObjectId.isValid(fileId)) {
+        query._id = new ObjectId(fileId); // Valid ObjectId case
+      } else {
+        return res.status(400).json({ error: 'Invalid file ID' });
+      }
+
+      const file = await dbClient.client.db('files_manager').collection('files')
+        .findOne({
+          _id: new ObjectId(fileId),
+          userId: new ObjectId(userId)
+        });
+      console.log("AFTER FILE.... :", file);
+
+      if (!file) return res.status(404).json({ error: 'Not found' });
+
+      const fileResponse = {
+        id: file._id.toString(),
+        userId: file.userId,
+        name: file.name,
+        type: file.type,
+        isPublic: file.isPublic,
+        parentId: file.parentId
+      };
+
+      return res.status(200).json(fileResponse);
+
+    } catch (error) {
+        console.error('Error in getShow:', error); // This will log errors to the console
+        return res.status(500).json({ error: 'Internal server error' });
+      }
+  }
+
+*/
+
+
+  // The getshow function
+/*  static async getShow(req, res) {
+    console.log("The beginning of function...") //
+    const token = req.headers['x-token'];
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Find the user by token
+    const userId = await redisClient.get(`auth_${token}`);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    console.log('userID: ', userId) //
+
+    // Retrieve the file by ID
+    const fileId = req.params.id; //await dbClient.client.db('files_manager')
+    console.log("BEFORE FILE....") //
+    const file = await dbClient.client.db('files_manager').collection('files').findOne({
+      _id: new dbClient.ObjectID(fileId),
+      userId: userId
+    });
+    console.log("AFTER FILE.... :", file) //
+
+    if (!file) return res.status(404).json({ error: 'Not found' });
+
+    const fileResponse = {
+      id: file._id.toString(),
+      userId: file.userId,
+      name: file.name,
+      type: file.type,
+      isPublic: file.isPublic,
+      parentId: file.parentId
+    };
+
+    return res.status(200).json(fileResponse);
+  }
+*/
+
+/*
+  // New function for file listing (pagination)
+  static async getIndex(req, res) {
+    const token = req.headers['x-token'];
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Find the user by token
+    const userId = await redisClient.get(`auth_${token}`);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const parentId = req.query.parentId || '0'; // Default to root
+    const page = parseInt(req.query.page, 10) || 0; // Default to page 0
+    const pageSize = 20;
+    const skip = page * pageSize;
+
+    // Retrieve files with pagination
+    const files = await dbClient.client.db('files_manager').collection('files')
+      .aggregate([
+        { $match: { userId, parentId } },
+        { $skip: skip },
+        { $limit: pageSize }
+      ]).toArray();
+
+    return res.status(200).json(files);
+  }
+*/
+
+  static async getIndex(req, res) {
+    try {
+      console.log("Inside getIndex");
+
+      const token = req.headers['x-token'];
+      console.log("Token:", token); //
+      if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+      // Find the user by token
+      const userIdString = await redisClient.get(`auth_${token}`);
+      if (!userIdString) return res.status(401).json({ error: 'Unauthorized' });
+
+      const userId = new ObjectId(userIdString);
+      console.log('userID:', userId); //
+      //if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+      // Handle parentId from query params, default to '0' (root) if not provided
+      let parentId = req.query.parentId || '0';
+      if (parentId !== '0') {
+        try {
+          parentId = new ObjectId(parentId); // Convert to ObjectId if it's not '0'
+        } catch (error) {
+          return res.status(400).json({ error: 'Invalid parentId format' });
+        }
+      }
+      //const parentId = req.query.parentId || '0'; // Default to root
+      //const parentId = req.query.parentId && req.query.parentId !== '0'
+        //? new ObjectId(req.query.parentId)
+        //: '0'; // Handle parentId conversion if needed, root is '0'
+      const page = parseInt(req.query.page, 10) || 0; // Default to page 0
+      const pageSize = 20;
+      const skip = page * pageSize;
+
+      console.log('parentId:', parentId); //
+      console.log('page:', page, 'skip:', skip); //
+
+      // Retrieve files with pagination
+      //const files = await dbClient.client.db('files_manager').collection('files')
+      const allFiles = await dbClient.client.db('files_manager').collection('files').find({}).toArray();
+        /*.aggregate([
+          { $match: { userId, parentId } },
+          { $skip: skip },
+          { $limit: pageSize }
+        ]).toArray();*/
+
+      console.log('All files:', allFiles);
+
+      //console.log("Files found:", files); //
+      //const rootFiles = await dbClient.client.db('files_manager').collection('files').find({ parentId: '0' }).toArray();
+      //console.log('Root files found:', rootFiles);
+      //const nestedFiles = await dbClient.client.db('files_manager').collection('files').find({ parentId: { $ne: '0' } }).toArray();
+      //console.log('Nested files found:', nestedFiles);
+
+      //const allFiles = await dbClient.client.db('files_manager').collection('files').find({}).toArray();
+      //console.log('All files:', allFiles);
+
+
+
+      return res.status(200).json(allFiles);
+    } catch (error) {
+      console.error('Error in getIndex:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
 }
 
 module.exports = FilesController;

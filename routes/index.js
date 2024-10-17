@@ -23,4 +23,8 @@ router.get('/users/me', UsersController.getMe);
 // Add the POST /files route
 router.post('/files', FilesController.postUpload);
 
+// getshow and getidex
+router.get('/files/:id', FilesController.getShow);
+router.get('/files', FilesController.getIndex);
+
 module.exports = router;

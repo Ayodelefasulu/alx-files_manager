@@ -1,0 +1,15 @@
+/root/alx-files_manager/controllers/FilesController.js:273
+              return _db["default"].db.collection('files').aggregate([{
+                                       ^
+
+TypeError: Cannot read properties of undefined (reading 'collection')
+    at call (/root/alx-files_manager/controllers/FilesController.js:145:37)
+    at tryCatch (/root/alx-files_manager/controllers/FilesController.js:2:1)
+    at Generator._invoke (/root/alx-files_manager/controllers/FilesController.js:2:1)
+    at Generator.next (/root/alx-files_manager/controllers/FilesController.js:2:1)
+    at asyncGeneratorStep (/root/alx-files_manager/controllers/FilesController.js:2:1)
+    at _next (/root/alx-files_manager/controllers/FilesController.js:2:1)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+Node.js v20.17.0 [nodemon] app crashed - waiting for file changes before starting...
+
